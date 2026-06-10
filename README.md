@@ -110,7 +110,7 @@ Database settings are in `config/config.php`:
 define('DB_HOST', '127.0.0.1');
 define('DB_NAME', 'smart_note_app');
 define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_PASS', '1234');
 ```
 
 These defaults match a typical Laragon MySQL setup.
@@ -118,8 +118,8 @@ These defaults match a typical Laragon MySQL setup.
 ## Default Admin Account
 
 ```text
-Email: admin@example.com
-Password: password
+Email: trungvo4869@gmail.com
+Password: 123456
 ```
 
 You can change the password from the Profile page after logging in.
