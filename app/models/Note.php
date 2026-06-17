@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 class Note extends Model
 {
+    private array $columnCache = [];
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->ensureActionColumns();
+    }
+
     public function all(int $userId, array $filters = []): array
     {
         $where = ['n.user_id = :user_id'];
@@ -11,13 +19,22 @@ class Note extends Model
 
         $where[] = isset($filters['deleted']) && $filters['deleted'] === '1' ? 'n.is_deleted = 1' : 'n.is_deleted = 0';
 
+        if (isset($filters['archived']) && $this->hasColumn('is_archived')) {
+            $where[] = 'n.is_archived = :archived';
+            $params['archived'] = (int)$filters['archived'];
+        }
+
         if (!empty($filters['search'])) {
-            $where[] = '(n.title LIKE :search OR n.content LIKE :search OR EXISTS (
+            $where[] = '(n.title LIKE :search_title OR n.content LIKE :search_content OR c.name LIKE :search_category OR EXISTS (
                 SELECT 1 FROM note_tags nt
                 INNER JOIN tags t ON t.id = nt.tag_id
-                WHERE nt.note_id = n.id AND t.name LIKE :search
+                WHERE nt.note_id = n.id AND t.name LIKE :search_tag
             ))';
-            $params['search'] = '%' . $filters['search'] . '%';
+            $search = '%' . $filters['search'] . '%';
+            $params['search_title'] = $search;
+            $params['search_content'] = $search;
+            $params['search_category'] = $search;
+            $params['search_tag'] = $search;
         }
 
         if (!empty($filters['category_id'])) {
@@ -118,6 +135,25 @@ class Note extends Model
         return $ok;
     }
 
+    public function updateDetails(int $id, int $userId, array $data, array $tagIds): ?array
+    {
+        $note = $this->find($id, $userId);
+        if (!$note) {
+            return null;
+        }
+
+        $this->update($id, $userId, [
+            'title' => $data['title'] ?? $note['title'],
+            'content' => $data['content'] ?? $note['content'],
+            'category_id' => $data['category_id'] ?? $note['category_id'],
+            'priority' => $data['priority'] ?? $note['priority'],
+            'image_path' => $data['image_path'] ?? $note['image_path'],
+            'is_pinned' => $note['is_pinned'],
+        ], $tagIds);
+
+        return $this->find($id, $userId);
+    }
+
     public function softDelete(int $id, int $userId): bool
     {
         return $this->setDeleted($id, $userId, 1);
@@ -138,6 +174,28 @@ class Note extends Model
     {
         $stmt = $this->db->prepare('UPDATE notes SET is_pinned = IF(is_pinned = 1, 0, 1), updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id');
         return $stmt->execute(['id' => $id, 'user_id' => $userId]);
+    }
+
+    public function toggleFavorite(int $id, int $userId): ?array
+    {
+        if (!$this->hasColumn('is_favorite')) {
+            return null;
+        }
+
+        $stmt = $this->db->prepare('UPDATE notes SET is_favorite = IF(is_favorite = 1, 0, 1), updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id');
+        $stmt->execute(['id' => $id, 'user_id' => $userId]);
+        return $this->find($id, $userId);
+    }
+
+    public function archive(int $id, int $userId): ?array
+    {
+        if (!$this->hasColumn('is_archived')) {
+            return null;
+        }
+
+        $stmt = $this->db->prepare('UPDATE notes SET is_archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id');
+        $stmt->execute(['id' => $id, 'user_id' => $userId]);
+        return $this->find($id, $userId);
     }
 
     public function counts(int $userId): array
@@ -200,6 +258,33 @@ class Note extends Model
             ORDER BY t.name ASC');
         $stmt->execute(['note_id' => $noteId, 'user_id' => $userId]);
         return $stmt->fetchAll();
+    }
+
+    private function hasColumn(string $column): bool
+    {
+        if (!array_key_exists($column, $this->columnCache)) {
+            $stmt = $this->db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table
+                  AND COLUMN_NAME = :column');
+            $stmt->execute(['table' => 'notes', 'column' => $column]);
+            $this->columnCache[$column] = (bool)$stmt->fetchColumn();
+        }
+
+        return $this->columnCache[$column];
+    }
+
+    private function ensureActionColumns(): void
+    {
+        if (!$this->hasColumn('is_favorite')) {
+            $this->db->exec('ALTER TABLE notes ADD COLUMN is_favorite TINYINT(1) NOT NULL DEFAULT 0 AFTER is_pinned');
+            $this->columnCache['is_favorite'] = true;
+        }
+
+        if (!$this->hasColumn('is_archived')) {
+            $this->db->exec('ALTER TABLE notes ADD COLUMN is_archived TINYINT(1) NOT NULL DEFAULT 0 AFTER is_favorite');
+            $this->columnCache['is_archived'] = true;
+        }
     }
 }
 

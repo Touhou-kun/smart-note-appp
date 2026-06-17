@@ -15,50 +15,77 @@
         </div>
         <a class="button button-primary" href="<?= e(url('notes/create')) ?>">+ New Note</a>
     </div>
-    
+
+    <form class="dashboard-search" method="get" action="<?= e(url('dashboard')) ?>" data-dashboard-search-form>
+        <label class="search-field">Search
+            <span class="search-input-wrap">
+                <span class="search-icon" aria-hidden="true">&#128269;</span>
+                <input type="search" name="search" value="<?= e($dashboardSearch ?? '') ?>" placeholder="Search notes..." autocomplete="off" data-dashboard-search-input>
+            </span>
+        </label>
+        <button class="button button-primary" type="submit">Search</button>
+    </form>
+
     <?php if (!$recentNotes): ?>
         <div class="empty-state">
-            <div class="empty-state-icon">📝</div>
+            <div class="empty-state-icon">SN</div>
             <p>No notes yet. <a href="<?= e(url('notes/create')) ?>">Create your first note</a> to start organizing.</p>
         </div>
     <?php else: ?>
-        <div class="notes-container" id="notesContainer">
-            <?php 
-            // Separate pinned and unpinned notes
+        <div class="notes-container" id="notesContainer" data-dashboard-search-results>
+            <?php
             $pinnedNotes = array_filter($recentNotes, fn($n) => $n['is_pinned']);
             $unpinnedNotes = array_filter($recentNotes, fn($n) => !$n['is_pinned']);
             $sortedNotes = array_merge($pinnedNotes, $unpinnedNotes);
             ?>
             <?php foreach ($sortedNotes as $note): ?>
-                <div class="note-card <?= $note['is_pinned'] ? 'is-pinned' : '' ?>" data-note-id="<?= e($note['id']) ?>" draggable="true">
+                <?php
+                $tagNames = array_map(static fn(array $tag): string => $tag['name'], $note['tags'] ?? []);
+                $searchText = implode(' ', [
+                    $note['title'],
+                    $note['content'],
+                    $note['category_name'] ?? '',
+                    implode(' ', $tagNames),
+                ]);
+                ?>
+                <div class="note-card <?= $note['is_pinned'] ? 'is-pinned' : '' ?>" data-note-id="<?= e($note['id']) ?>" data-search-text="<?= e($searchText) ?>" draggable="true">
                     <div class="note-card-header">
-                        <h3 class="note-title" contenteditable="true" data-field="title"><?= e($note['title']) ?></h3>
-                        <button class="note-pin-btn" data-note-id="<?= e($note['id']) ?>" title="<?= $note['is_pinned'] ? 'Unpin' : 'Pin' ?>">
-                            <span class="pin-icon"><?= $note['is_pinned'] ? '📌' : '📍' ?></span>
-                        </button>
+                        <h3 class="note-title"><?= e($note['title']) ?></h3>
+                        <div class="quick-actions">
+                            <button class="note-favorite-btn" data-note-id="<?= e($note['id']) ?>" title="<?= !empty($note['is_favorite']) ? 'Unfavorite' : 'Favorite' ?>">
+                                <span class="favorite-icon"><?= !empty($note['is_favorite']) ? '&#9733;' : '&#9734;' ?></span>
+                            </button>
+                            <button class="note-pin-btn" data-note-id="<?= e($note['id']) ?>" title="<?= $note['is_pinned'] ? 'Unpin' : 'Pin' ?>">
+                                <span class="pin-icon"><?= $note['is_pinned'] ? '&#9679;' : '&#9675;' ?></span>
+                            </button>
+                        </div>
                     </div>
-                    
-                    <div class="note-content" contenteditable="true" data-field="content"><?= e($note['content']) ?></div>
-                    
+
+                    <div class="note-content"><?= e(strlen($note['content']) > 180 ? substr($note['content'], 0, 180) . '...' : $note['content']) ?></div>
+
                     <?php if ($note['image_path']): ?>
                         <div class="note-image">
-                            <img src="<?= e(url('public/uploads/' . $note['image_path'])) ?>" alt="Note image">
+                            <img src="<?= e(upload_url($note['image_path'])) ?>" alt="Note image">
                         </div>
                     <?php endif; ?>
-                    
+
+                    <div class="tag-row">
+                        <?php foreach ($note['tags'] ?? [] as $tag): ?>
+                            <span>#<?= e($tag['name']) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+
                     <div class="note-meta">
                         <span class="note-category"><?= e($note['category_name'] ?? 'Uncategorized') ?></span>
                         <span class="note-priority <?= strtolower($note['priority']) ?>"><?= e($note['priority']) ?></span>
                         <span class="note-date"><?= date('M d, Y', strtotime($note['updated_at'] ?? $note['created_at'])) ?></span>
                     </div>
-                    
+
                     <div class="note-actions">
-                        <a href="<?= e(url('notes/show?id=' . $note['id'])) ?>" class="action-btn" title="View">👁️</a>
-                        <a href="<?= e(url('notes/edit?id=' . $note['id'])) ?>" class="action-btn" title="Edit">✏️</a>
-                        <button class="action-btn delete-btn" data-note-id="<?= e($note['id']) ?>" title="Delete">🗑️</button>
+                        <a href="<?= e(url('notes/show?id=' . $note['id'])) ?>" class="action-btn" title="View">View</a>
+                        <button class="action-btn archive-btn" data-note-id="<?= e($note['id']) ?>" title="Archive">Archive</button>
+                        <button class="action-btn delete-btn" data-note-id="<?= e($note['id']) ?>" title="Delete">Delete</button>
                     </div>
-                    
-                    <div class="note-save-indicator">Saved</div>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -66,48 +93,38 @@
 </section>
 
 <script>
-const AUTOSAVE_DELAY = 1500;
-let saveTimeout;
 let draggedElement = null;
 
-// Get CSRF token from meta tag
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content || '';
 }
 
-// Initialize notes container
 document.addEventListener('DOMContentLoaded', function() {
     const container = document.getElementById('notesContainer');
     if (!container) return;
 
-    // Drag and drop listeners
     container.addEventListener('dragstart', handleDragStart);
     container.addEventListener('dragover', handleDragOver);
     container.addEventListener('drop', handleDrop);
     container.addEventListener('dragend', handleDragEnd);
 
-    // Pin button listeners
     document.querySelectorAll('.note-pin-btn').forEach(btn => {
         btn.addEventListener('click', togglePin);
     });
 
-    // Delete button listeners
+    document.querySelectorAll('.note-favorite-btn').forEach(btn => {
+        btn.addEventListener('click', toggleFavorite);
+    });
+
+    document.querySelectorAll('.archive-btn').forEach(btn => {
+        btn.addEventListener('click', archiveNote);
+    });
+
     document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', deleteNote);
     });
-
-    // Autosave listeners
-    document.querySelectorAll('[contenteditable="true"]').forEach(element => {
-        element.addEventListener('blur', scheduleAutosave);
-        element.addEventListener('input', function() {
-            const noteCard = this.closest('.note-card');
-            const indicator = noteCard.querySelector('.note-save-indicator');
-            if (indicator) indicator.textContent = 'Saving...';
-        });
-    });
 });
 
-// Drag and Drop functions
 function handleDragStart(e) {
     if (e.target.classList.contains('note-card')) {
         draggedElement = e.target;
@@ -119,10 +136,10 @@ function handleDragStart(e) {
 function handleDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    
+
     const afterElement = getDragAfterElement(e.clientY);
     const container = document.getElementById('notesContainer');
-    
+
     if (afterElement == null) {
         container.appendChild(draggedElement);
     } else {
@@ -146,109 +163,85 @@ function getDragAfterElement(y) {
 
     return draggableElements.reduce((closest, child) => {
         if (child === draggedElement) return closest;
-        
+
         const box = child.getBoundingClientRect();
         const offset = y - box.top - box.height / 2;
 
         if (offset < 0 && offset > closest.offset) {
             return { offset: offset, element: child };
-        } else {
-            return closest;
         }
+
+        return closest;
     }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
-// Pin/Unpin function
+function postNoteAction(url, noteId) {
+    const formData = new FormData();
+    formData.append('id', noteId);
+    formData.append('csrf_token', getCsrfToken());
+
+    return fetch(url, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json());
+}
+
 function togglePin(e) {
     e.preventDefault();
     const noteId = this.dataset.noteId;
     const indicator = this.querySelector('.pin-icon');
 
-    const formData = new FormData();
-    formData.append('id', noteId);
-    formData.append('csrf_token', getCsrfToken());
-
-    fetch('<?= e(url('api/notes/toggle-pin')) ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (data.is_pinned) {
-                indicator.textContent = '📌';
-                this.parentElement.parentElement.style.order = '-1';
-            } else {
-                indicator.textContent = '📍';
-                this.parentElement.parentElement.style.order = '0';
+    postNoteAction('<?= e(url('api/notes/toggle-pin')) ?>', noteId)
+        .then(data => {
+            if (data.success) {
+                indicator.innerHTML = data.is_pinned ? '&#9679;' : '&#9675;';
+                this.title = data.is_pinned ? 'Unpin' : 'Pin';
+                this.closest('.note-card')?.classList.toggle('is-pinned', Boolean(data.is_pinned));
             }
-        }
-    })
-    .catch(error => console.error('Error:', error));
+        })
+        .catch(error => console.error('Error:', error));
 }
 
-// Delete function
+function toggleFavorite(e) {
+    e.preventDefault();
+    const noteId = this.dataset.noteId;
+    const indicator = this.querySelector('.favorite-icon');
+
+    postNoteAction('<?= e(url('api/notes/toggle-favorite')) ?>', noteId)
+        .then(data => {
+            if (data.success) {
+                indicator.innerHTML = data.is_favorite ? '&#9733;' : '&#9734;';
+                this.title = data.is_favorite ? 'Unfavorite' : 'Favorite';
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function archiveNote(e) {
+    e.preventDefault();
+    const noteCard = this.closest('.note-card');
+
+    postNoteAction('<?= e(url('api/notes/archive')) ?>', this.dataset.noteId)
+        .then(data => {
+            if (data.success) {
+                noteCard?.remove();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
 function deleteNote(e) {
     e.preventDefault();
     if (!confirm('Are you sure you want to delete this note?')) return;
 
-    const noteId = this.dataset.noteId;
-    const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
+    const noteCard = this.closest('.note-card');
 
-    const formData = new FormData();
-    formData.append('id', noteId);
-    formData.append('csrf_token', getCsrfToken());
-
-    fetch('<?= e(url('api/notes/delete')) ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            noteCard.style.animation = 'slideOut 0.3s ease-out';
-            setTimeout(() => noteCard.remove(), 300);
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
-
-// Autosave function
-function scheduleAutosave(e) {
-    const noteCard = e.target.closest('.note-card');
-    if (!noteCard) return;
-    
-    const noteId = noteCard.dataset.noteId;
-    const title = noteCard.querySelector('[data-field="title"]').textContent;
-    const content = noteCard.querySelector('[data-field="content"]').textContent;
-
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-        const formData = new FormData();
-        formData.append('id', noteId);
-        formData.append('title', title);
-        formData.append('content', content);
-        formData.append('csrf_token', getCsrfToken());
-
-        fetch('<?= e(url('api/notes/autosave')) ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
+    postNoteAction('<?= e(url('api/notes/delete')) ?>', this.dataset.noteId)
         .then(data => {
             if (data.success) {
-                const indicator = noteCard.querySelector('.note-save-indicator');
-                if (indicator) {
-                    indicator.textContent = 'Saved';
-                    indicator.style.opacity = '1';
-                    setTimeout(() => {
-                        indicator.style.opacity = '0.5';
-                    }, 1000);
-                }
+                noteCard?.remove();
             }
         })
         .catch(error => console.error('Error:', error));
-    }, AUTOSAVE_DELAY);
 }
 </script>
-

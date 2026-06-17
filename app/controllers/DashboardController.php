@@ -19,11 +19,12 @@ class DashboardController extends Controller
             ['label' => 'Deleted Notes', 'value' => $noteCounts['deleted'], 'tone' => 'slate'],
         ];
 
-        $recentNotes = (new Note())->all($userId, ['deleted' => '0']);
+        $recentNotes = (new Note())->all($userId, ['deleted' => '0', 'archived' => '0']);
         $this->view('dashboard/index', [
             'title' => 'Dashboard',
             'stats' => $stats,
-            'recentNotes' => array_slice($recentNotes, 0, 5),
+            'recentNotes' => $recentNotes,
+            'dashboardSearch' => trim($_GET['search'] ?? ''),
         ]);
     }
 }

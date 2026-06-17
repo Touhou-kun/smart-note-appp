@@ -26,6 +26,7 @@ class NoteController extends Controller
             'priority' => $_GET['priority'] ?? '',
             'pinned' => $_GET['pinned'] ?? '',
             'deleted' => '0',
+            'archived' => '0',
         ];
 
         $this->view('notes/index', [
@@ -289,8 +290,68 @@ class NoteController extends Controller
     {
         $this->requireAuth();
         header('Content-Type: application/json');
-        $notes = $this->notes->all(current_user_id(), ['deleted' => '0']);
+        $notes = $this->notes->all(current_user_id(), [
+            'search' => trim($_GET['search'] ?? ''),
+            'deleted' => '0',
+            'archived' => '0',
+        ]);
         echo json_encode($notes);
+    }
+
+    public function updateApi(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+        header('Content-Type: application/json');
+
+        $id = (int)($_POST['id'] ?? 0);
+        $note = $this->notes->find($id, current_user_id());
+        if (!$note) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Note not found']);
+            return;
+        }
+
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+        $priority = $_POST['priority'] ?? 'Normal';
+
+        if ($title === '' || $content === '') {
+            http_response_code(422);
+            echo json_encode(['error' => 'Title and content are required.']);
+            return;
+        }
+
+        if (!in_array($priority, ['Normal', 'Important'], true)) {
+            http_response_code(422);
+            echo json_encode(['error' => 'Invalid priority selected.']);
+            return;
+        }
+
+        $imagePath = $note['image_path'];
+        if (!empty($_FILES['image']['name'])) {
+            $newImage = $this->handleUpload();
+            if ($this->uploadFailed) {
+                http_response_code(422);
+                echo json_encode(['error' => 'Image upload failed.']);
+                return;
+            }
+
+            if ($newImage !== null) {
+                $this->deleteImage($note['image_path']);
+                $imagePath = $newImage;
+            }
+        }
+
+        $updated = $this->notes->updateDetails($id, current_user_id(), [
+            'title' => $title,
+            'content' => $content,
+            'category_id' => (int)($_POST['category_id'] ?? 0),
+            'priority' => $priority,
+            'image_path' => $imagePath,
+        ], $_POST['tags'] ?? []);
+
+        echo json_encode(['success' => true, 'note' => $updated]);
     }
 
     public function autoSave(): void
@@ -340,7 +401,57 @@ class NoteController extends Controller
         $this->notes->togglePin($id, current_user_id());
         $updated = $this->notes->find($id, current_user_id());
         
-        echo json_encode(['success' => true, 'is_pinned' => $updated['is_pinned']]);
+        echo json_encode(['success' => true, 'is_pinned' => (int)$updated['is_pinned']]);
+    }
+
+    public function toggleFavoriteApi(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+        header('Content-Type: application/json');
+
+        $id = (int)($_POST['id'] ?? 0);
+        $note = $this->notes->find($id, current_user_id());
+
+        if (!$note) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Note not found']);
+            return;
+        }
+
+        $updated = $this->notes->toggleFavorite($id, current_user_id());
+        if (!$updated) {
+            http_response_code(422);
+            echo json_encode(['error' => 'Favorite is not available for this database.']);
+            return;
+        }
+
+        echo json_encode(['success' => true, 'is_favorite' => (int)($updated['is_favorite'] ?? 0)]);
+    }
+
+    public function archiveApi(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+        header('Content-Type: application/json');
+
+        $id = (int)($_POST['id'] ?? 0);
+        $note = $this->notes->find($id, current_user_id());
+
+        if (!$note) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Note not found']);
+            return;
+        }
+
+        $updated = $this->notes->archive($id, current_user_id());
+        if (!$updated) {
+            http_response_code(422);
+            echo json_encode(['error' => 'Archive is not available for this database.']);
+            return;
+        }
+
+        echo json_encode(['success' => true, 'is_archived' => (int)($updated['is_archived'] ?? 0)]);
     }
 
     public function deleteApi(): void
