@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title><?= e(($title ?? APP_NAME) . ' - ' . APP_NAME) ?></title>
     <link rel="stylesheet" href="<?= e(asset('css/style.css')) ?>">
 </head>

@@ -283,4 +283,82 @@ class NoteController extends Controller
             unlink($file);
         }
     }
+
+    // API Methods for Dashboard
+    public function dashboardApi(): void
+    {
+        $this->requireAuth();
+        header('Content-Type: application/json');
+        $notes = $this->notes->all(current_user_id(), ['deleted' => '0']);
+        echo json_encode($notes);
+    }
+
+    public function autoSave(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+        header('Content-Type: application/json');
+        
+        $id = (int)($_POST['id'] ?? 0);
+        $content = trim($_POST['content'] ?? '');
+        $title = trim($_POST['title'] ?? '');
+
+        $note = $this->notes->find($id, current_user_id());
+        if (!$note) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Note not found']);
+            return;
+        }
+
+        $this->notes->update($id, current_user_id(), [
+            'title' => $title ?: $note['title'],
+            'content' => $content,
+            'category_id' => $note['category_id'],
+            'priority' => $note['priority'],
+            'is_pinned' => $note['is_pinned'],
+            'image_path' => $note['image_path'],
+        ], array_column($note['tags'] ?? [], 'id'));
+
+        echo json_encode(['success' => true, 'updated_at' => date('Y-m-d H:i:s')]);
+    }
+
+    public function togglePinApi(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+        header('Content-Type: application/json');
+        
+        $id = (int)($_POST['id'] ?? 0);
+        $note = $this->notes->find($id, current_user_id());
+
+        if (!$note) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Note not found']);
+            return;
+        }
+
+        $this->notes->togglePin($id, current_user_id());
+        $updated = $this->notes->find($id, current_user_id());
+        
+        echo json_encode(['success' => true, 'is_pinned' => $updated['is_pinned']]);
+    }
+
+    public function deleteApi(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+        header('Content-Type: application/json');
+        
+        $id = (int)($_POST['id'] ?? 0);
+        $note = $this->notes->find($id, current_user_id());
+
+        if (!$note) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Note not found']);
+            return;
+        }
+
+        $this->notes->softDelete($id, current_user_id());
+        echo json_encode(['success' => true, 'message' => 'Note moved to recycle bin']);
+    }
 }

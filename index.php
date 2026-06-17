@@ -35,6 +35,10 @@ $router->post('notes/delete', [NoteController::class, 'delete']);
 $router->post('notes/restore', [NoteController::class, 'restore']);
 $router->post('notes/force-delete', [NoteController::class, 'forceDelete']);
 $router->post('notes/toggle-pin', [NoteController::class, 'togglePin']);
+$router->post('api/notes/autosave', [NoteController::class, 'autoSave']);
+$router->post('api/notes/toggle-pin', [NoteController::class, 'togglePinApi']);
+$router->post('api/notes/delete', [NoteController::class, 'deleteApi']);
+$router->get('api/notes', [NoteController::class, 'dashboardApi']);
 $router->get('recycle-bin', [NoteController::class, 'recycleBin']);
 
 $router->get('categories', [CategoryController::class, 'index']);
