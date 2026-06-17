@@ -17,6 +17,7 @@
             <nav class="side-nav">
                 <a class="<?= e(active_route('dashboard')) ?>" href="<?= e(url('dashboard')) ?>">Dashboard</a>
                 <a class="<?= e(active_route('notes')) ?>" href="<?= e(url('notes')) ?>">Notes</a>
+                <a class="<?= e(active_route('archived')) ?>" href="<?= e(url('archived')) ?>">Archive</a>
                 <a class="<?= e(active_route('categories')) ?>" href="<?= e(url('categories')) ?>">Categories</a>
                 <a class="<?= e(active_route('tags')) ?>" href="<?= e(url('tags')) ?>">Tags</a>
                 <a class="<?= e(active_route('recycle-bin')) ?>" href="<?= e(url('recycle-bin')) ?>">Recycle Bin</a>

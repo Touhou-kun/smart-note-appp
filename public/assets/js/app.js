@@ -144,6 +144,7 @@
                 results.innerHTML = nextResults.innerHTML;
                 bindConfirmForms(results);
                 bindNotesEditor(results);
+                bindStandaloneNoteActions(results);
                 updateHistory(url, historyMode);
             } catch (error) {
                 if (error.name === 'AbortError') {
@@ -172,6 +173,39 @@
         window.addEventListener('popstate', () => {
             syncFormFromUrl();
             loadResults('none');
+        });
+    }
+
+    function bindStandaloneNoteActions(root = document) {
+        root.querySelectorAll('[data-note-action="archive"]').forEach((button) => {
+            if (button.dataset.actionReady === 'true' || button.closest('[data-editable-note]')) {
+                return;
+            }
+
+            button.addEventListener('click', async (event) => {
+                event.preventDefault();
+                const noteId = button.dataset.noteId || document.getElementById('keepEditModal')?.dataset.noteId;
+                if (!noteId) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('id', noteId);
+                formData.append('csrf_token', csrfToken());
+
+                const response = await fetch(appUrl('api/notes/archive'), {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    return;
+                }
+
+                button.closest('[data-keep-card], .note-card')?.remove();
+            });
+
+            button.dataset.actionReady = 'true';
         });
     }
 
@@ -445,5 +479,6 @@
     bindNotesSearch();
     bindDashboardSearch();
     bindNotesEditor();
+    bindStandaloneNoteActions();
 })();
 

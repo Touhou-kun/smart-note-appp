@@ -24,7 +24,6 @@ class DashboardController extends Controller
             'title' => 'Dashboard',
             'stats' => $stats,
             'recentNotes' => $recentNotes,
-            'dashboardSearch' => trim($_GET['search'] ?? ''),
         ]);
     }
 }

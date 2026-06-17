@@ -16,16 +16,6 @@
         <a class="button button-primary" href="<?= e(url('notes/create')) ?>">+ New Note</a>
     </div>
 
-    <form class="dashboard-search" method="get" action="<?= e(url('dashboard')) ?>" data-dashboard-search-form>
-        <label class="search-field">Search
-            <span class="search-input-wrap">
-                <span class="search-icon" aria-hidden="true">&#128269;</span>
-                <input type="search" name="search" value="<?= e($dashboardSearch ?? '') ?>" placeholder="Search notes..." autocomplete="off" data-dashboard-search-input>
-            </span>
-        </label>
-        <button class="button button-primary" type="submit">Search</button>
-    </form>
-
     <?php if (!$recentNotes): ?>
         <div class="empty-state">
             <div class="empty-state-icon">SN</div>

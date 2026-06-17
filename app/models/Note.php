@@ -193,7 +193,7 @@ class Note extends Model
             return null;
         }
 
-        $stmt = $this->db->prepare('UPDATE notes SET is_archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id');
+        $stmt = $this->db->prepare('UPDATE notes SET is_archived = IF(is_archived = 1, 0, 1), updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id');
         $stmt->execute(['id' => $id, 'user_id' => $userId]);
         return $this->find($id, $userId);
     }

@@ -61,6 +61,28 @@ class NoteController extends Controller
         ]);
     }
 
+    public function archived(): void
+    {
+        $this->requireAuth();
+        $filters = [
+            'search' => trim($_GET['search'] ?? ''),
+            'category_id' => $_GET['category_id'] ?? '',
+            'tag_id' => $_GET['tag_id'] ?? '',
+            'priority' => $_GET['priority'] ?? '',
+            'pinned' => $_GET['pinned'] ?? '',
+            'deleted' => '0',
+            'archived' => '1',
+        ];
+
+        $this->view('notes/archived', [
+            'title' => 'Archive',
+            'notes' => $this->notes->all(current_user_id(), $filters),
+            'categories' => $this->categories->all(current_user_id()),
+            'tags' => $this->tags->all(current_user_id()),
+            'filters' => $filters,
+        ]);
+    }
+
     public function create(): void
     {
         $this->requireAuth();

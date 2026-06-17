@@ -42,6 +42,7 @@ $router->post('api/notes/toggle-favorite', [NoteController::class, 'toggleFavori
 $router->post('api/notes/archive', [NoteController::class, 'archiveApi']);
 $router->post('api/notes/delete', [NoteController::class, 'deleteApi']);
 $router->get('api/notes', [NoteController::class, 'dashboardApi']);
+$router->get('archived', [NoteController::class, 'archived']);
 $router->get('recycle-bin', [NoteController::class, 'recycleBin']);
 
 $router->get('categories', [CategoryController::class, 'index']);
